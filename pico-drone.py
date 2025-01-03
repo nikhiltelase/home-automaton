@@ -3,8 +3,8 @@ from machine import Pin, PWM
 import socket
 
 # Motor control pins setup
-motor1_in1 = PWM(Pin(0))  # GPIO5 -> Motor 1 IN1
-motor2_in3 = PWM(Pin(1))  # GPIO14 -> Motor 2 IN3
+motor1_in1 = PWM(Pin(4))  # GPIO5 -> Motor 1 IN1
+motor2_in3 = PWM(Pin(5))  # GPIO14 -> Motor 2 IN3
 motor3_in1 = PWM(Pin(2))  # GPIO4 -> Motor 3 IN1
 motor4_in3 = PWM(Pin(3))  # GPIO12 -> Motor 4 IN3
 

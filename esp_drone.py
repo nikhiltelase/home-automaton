@@ -1,210 +1,525 @@
 import network
+
 from machine import Pin, PWM
+
 import socket
 
+import json
+
+
+
 # Motor control pins setup
-motor1_in1 = PWM(Pin(5), freq=1000)  # D1 -> Motor 1 IN1
-motor2_in3 = PWM(Pin(14), freq=1000)  # D5 -> Motor 3 IN3
-motor3_in1 = PWM(Pin(4), freq=1000)  # D2 -> Motor 2 IN1
-motor4_in3 = PWM(Pin(12), freq=1000)  # D6 -> Motor 4 IN3
 
-# Onboard LED setup (GPIO2 -> D4)
+motor1_in1 = PWM(Pin(5), freq=1000)   
+
+motor2_in3 = PWM(Pin(14), freq=1000)  
+
+motor3_in1 = PWM(Pin(4), freq=1000)   
+
+motor4_in3 = PWM(Pin(12), freq=1000)  
+
+
+
+# Onboard LED setup
+
 led = Pin(2, Pin.OUT)
-led.value(0)  # led on when power the board
 
-# Set default motor speed and state
-speed = 100  # PWM duty cycle (range: 0-1023)
-motor_state = "off"  # Motors are initially off
-led_state = "on"  # LED is initially on
+led.value(0)
+
+
+
+motor_speeds = {
+
+    "motor1": 100,
+
+    "motor2": 100,
+
+    "motor3": 100,
+
+    "motor4": 100
+
+}
+
+motors_state = "off"
+
+led_state = "on"
+
 
 
 def create_wifi():
-    # Set up Access Point (AP mode)
+
     ap = network.WLAN(network.AP_IF)
+
     ap.active(True)
+
     ap.config(essid='ESP_Hotspot', password='12345678')
+
     print('Access Point Created')
-    print('Connect to Wi-Fi with SSID:', ap.config('essid'))
+
     print('IP Address:', ap.ifconfig()[0])
 
 
-# Motor control functions
-def motor_on():
-    global motor_state
-    motor1_in1.duty(speed)
-    motor2_in3.duty(speed)
-    motor3_in1.duty(speed)
-    motor4_in3.duty(speed)
-    motor_state = "on"
+
+def motors_on():
+
+    global motors_state
+
+    motor1_in1.duty(motor_speeds["motor1"])
+
+    motor2_in3.duty(motor_speeds["motor2"])
+
+    motor3_in1.duty(motor_speeds["motor3"])
+
+    motor4_in3.duty(motor_speeds["motor4"])
+
+    motors_state = "on"
 
 
-def motor_off():
-    global motor_state, speed
-    speed = 100
+
+def motors_off():
+
+    global motors_state
+
     motor1_in1.duty(0)
+
     motor2_in3.duty(0)
+
     motor3_in1.duty(0)
+
     motor4_in3.duty(0)
-    motor_state = "off"
+
+    motors_state = "off"
 
 
-def increase_speed():
-    global speed
-    if speed < 923:
-        speed += 100
-    else:
-        speed = 1023  # Ensure it doesn't exceed max
-    motor_on()
+
+def adjust_motor_speed(motor_num, new_speed):
+
+    global motor_speeds
+
+    try:
+
+        new_speed = max(0, min(1023, int(new_speed)))
+
+        motor_speeds[f"motor{motor_num}"] = new_speed
+
+        if motors_state == "on":
+
+            if motor_num == 1: motor1_in1.duty(new_speed)
+
+            elif motor_num == 2: motor2_in3.duty(new_speed)
+
+            elif motor_num == 3: motor3_in1.duty(new_speed)
+
+            elif motor_num == 4: motor4_in3.duty(new_speed)
+
+        return True
+
+    except:
+
+        return False
 
 
-def decrease_speed():
-    global speed
-    if speed > 100:
-        speed -= 100
-    else:
-        speed = 0  # Ensure it doesn't go below 0
-    motor_on()
+
+def adjust_all_speeds(increment):
+
+    for i in range(1, 5):
+
+        current_speed = motor_speeds[f"motor{i}"]
+
+        new_speed = max(0, min(1023, current_speed + increment))
+
+        adjust_motor_speed(i, new_speed)
 
 
-# HTML page for web interface with JavaScript
+
 def web_page():
-    global led_state
+
     html = f"""
+
     <html>
+
     <head>
+
         <meta name="viewport" content="width=device-width, initial-scale=1">
+
         <title>Motor Control</title>
+
         <style>
+
             body {{ font-family: Arial, sans-serif; text-align: center; }}
+
             button {{ padding: 10px; margin: 5px; width: 150px; }}
-            h1 {{ color: #333; }}
-            p {{ font-size: 18px; }}
-          </style>
+
+            .motor-control {{ 
+
+                border: 1px solid #ccc; 
+
+                margin: 10px; 
+
+                padding: 10px;
+
+                border-radius: 5px;
+
+            }}
+
+            .speed-input {{
+
+                width: 80px;
+
+                margin: 5px;
+
+                padding: 8px;
+
+                font-size: 16px;
+
+                text-align: center;
+
+            }}
+
+            .speed-label {{
+
+                font-weight: bold;
+
+                margin-right: 10px;
+
+            }}
+
+            .set-button {{
+
+                padding: 5px 15px;
+
+                margin-left: 10px;
+
+                background-color: #4CAF50;
+
+                color: white;
+
+                border: none;
+
+                border-radius: 4px;
+
+                cursor: pointer;
+
+            }}
+
+        </style>
+
         <script>
-            let motorSpeed = {speed};
-            let motorState = '{motor_state}';
 
             function updateStatus() {{
+
                 fetch('/status')
+
                 .then(response => response.json())
+
                 .then(data => {{
-                    document.getElementById('status').innerText = data.status;
-                    document.getElementById('speed').innerText = data.speed;
+
+                    document.getElementById('motorsState').innerText = data.motors_state;
+
                     document.getElementById('ledStatus').innerText = data.led_status;
-                    motorSpeed = data.speed;  // Update motorSpeed from server data
-                    motorState = data.status;  // Update motorState from server data
+
+                    
+
+                    // Only update displayed speeds, not input values
+
+                    for (let i = 1; i <= 4; i++) {{
+
+                        document.getElementById(`motor${{i}}Speed`).innerText = data[`motor${{i}}_speed`];
+
+                    }}
+
                 }});
+
             }}
+
             
-            function controlMotor(action) {{
-                fetch('/motor/' + action)
-                .then(() => {{
-                    updateStatus(); // Update the status after controlling motor
-                }});
+
+            function controlMotors(action) {{
+
+                fetch('/motors/' + action)
+
+                .then(() => updateStatus());
+
             }}
+
+
 
             function controlLED(action) {{
+
                 fetch('/led/' + action)
-                .then(() => {{
-                    updateStatus(); // Update the status after controlling LED
-                }});
+
+                .then(() => updateStatus());
+
             }}
 
-            function changeSpeed(action, increment) {{
-                if (motorState === 'on') {{
-                     if (motorSpeed + increment <= 1023 && motorSpeed + increment >= 0) {{
-                        fetch('/speed/' + action)
-                        .then(() => {{
-                            motorSpeed += increment;
-                            document.getElementById('speed').innerText = motorSpeed;
-                        }});
-                    }}
-                }} else {{
-                        alert("Motor is OFF! Turn it ON first.");
-                }}
+
+
+            function setSpeed(motorNum) {{
+
+                const input = document.getElementById(`speed${{motorNum}}`);
+
+                let speed = parseInt(input.value) || 0;
+
                 
+
+                // Clamp value between 0 and 1023
+
+                speed = Math.max(0, Math.min(1023, speed));
+
+                input.value = speed;
+
+                
+
+                fetch(`/adjust/${{motorNum}}/${{speed}}`)
+
+                .then(response => updateStatus());
+
             }}
+
+
+
+            function adjustAllSpeeds(increment) {{
+
+                fetch(`/adjust_all/${{increment}}`)
+
+                .then(() => updateStatus());
+
+            }}
+
+
+
+            // Initialize updates
+
+            document.addEventListener('DOMContentLoaded', function() {{
+
+                updateStatus();
+
+                setInterval(updateStatus, 500);
+
+            }});
+
         </script>
+
     </head>
-    <body onload="updateStatus()">
+
+    <body>
+
         <h1>Motor Control</h1>
-        <p>LED: <span id="ledStatus">{led_state}</span></p>
-        <button onclick="controlLED('on')">LED ON</button>
-        <button onclick="controlLED('off')">LED OFF</button>
-        <br/>
-        <p>Status: <span id="status">{motor_state}</span></p>
-        <button onclick="controlMotor('on')">Turn Motors ON</button>
-        <button onclick="controlMotor('off')">Turn Motors OFF</button>
-        <br/>
-        <p>Speed: <span id="speed">{speed}</span></p>
-        <button onclick="changeSpeed('up', 100)">Increase Speed</button>
-        <button onclick="changeSpeed('down', -100)">Decrease Speed</button>
+
+        
+
+        <div class="motor-control">
+
+            <p>LED Status: <span id="ledStatus">{led_state}</span></p>
+
+            <button onclick="controlLED('on')">LED ON</button>
+
+            <button onclick="controlLED('off')">LED OFF</button>
+
+        </div>
+
+
+
+        <div class="motor-control">
+
+            <p>Motors State: <span id="motorsState">{motors_state}</span></p>
+
+            <button onclick="controlMotors('on')">All Motors ON</button>
+
+            <button onclick="controlMotors('off')">All Motors OFF</button>
+
+            <br>
+
+            <button onclick="adjustAllSpeeds(100)">Increase All</button>
+
+            <button onclick="adjustAllSpeeds(-100)">Decrease All</button>
+
+        </div>
+
+
+
+        <div class="motor-control">
+
+            <h3>Motor Speeds (0-1023)</h3>
+
+            <div>
+
+                <span class="speed-label">Motor 1:</span>
+
+                <input type="number" id="speed1" class="speed-input" min="0" max="1023" value="0">
+
+                <button class="set-button" onclick="setSpeed(1)">Set</button>
+
+                <span>Current: <span id="motor1Speed">{motor_speeds['motor1']}</span></span>
+
+            </div>
+
+            <br>
+
+            <div>
+
+                <span class="speed-label">Motor 2:</span>
+
+                <input type="number" id="speed2" class="speed-input" min="0" max="1023" value="0">
+
+                <button class="set-button" onclick="setSpeed(2)">Set</button>
+
+                <span>Current: <span id="motor2Speed">{motor_speeds['motor2']}</span></span>
+
+            </div>
+
+            <br>
+
+            <div>
+
+                <span class="speed-label">Motor 3:</span>
+
+                <input type="number" id="speed3" class="speed-input" min="0" max="1023" value="0">
+
+                <button class="set-button" onclick="setSpeed(3)">Set</button>
+
+                <span>Current: <span id="motor3Speed">{motor_speeds['motor3']}</span></span>
+
+            </div>
+
+            <br>
+
+            <div>
+
+                <span class="speed-label">Motor 4:</span>
+
+                <input type="number" id="speed4" class="speed-input" min="0" max="1023" value="0">
+
+                <button class="set-button" onclick="setSpeed(4)">Set</button>
+
+                <span>Current: <span id="motor4Speed">{motor_speeds['motor4']}</span></span>
+
+            </div>
+
+        </div>
+
     </body>
+
     </html>
+
     """
+
     return html
 
 
+
 def get_status_json():
-    # Send current status as JSON
-    status = {
-        "status": motor_state,
-        "speed": speed,
-        "led_status": led_state
-    }
-    return status
+
+    return json.dumps({
+
+        "motors_state": motors_state,
+
+        "led_status": led_state,
+
+        "motor1_speed": motor_speeds["motor1"],
+
+        "motor2_speed": motor_speeds["motor2"],
+
+        "motor3_speed": motor_speeds["motor3"],
+
+        "motor4_speed": motor_speeds["motor4"]
+
+    })
 
 
-# Web server handler
+
 def web_server():
+
     global led_state
+
     addr = socket.getaddrinfo('0.0.0.0', 80)[0][-1]
+
     s = socket.socket()
+
     s.bind(addr)
+
     s.listen(5)
 
-    while True:
-        cl, addr = s.accept()  # Accept incoming connection
-        print('Client connected from', addr)
-        try:
-            request = cl.recv(1024)  # Receive the client's request
-            request = str(request)
 
-            # Motor control logic based on URL parameters
-            if '/motor/on' in request:
-                motor_on()
-            elif '/motor/off' in request:
-                motor_off()
-            elif '/speed/up' in request:
-                increase_speed()
-            elif '/speed/down' in request:
-                decrease_speed()
+
+    while True:
+
+        cl, addr = s.accept()
+
+        try:
+
+            request = str(cl.recv(1024))
+
+
+
+            if '/motors/on' in request:
+
+                motors_on()
+
+            elif '/motors/off' in request:
+
+                motors_off()
+
+            elif '/adjust/' in request:
+
+                parts = request.split('/adjust/')[1].split('/')
+
+                motor_num = int(parts[0])
+
+                speed = int(parts[1].split(' ')[0])
+
+                adjust_motor_speed(motor_num, speed)
+
+            elif '/adjust_all/' in request:
+
+                increment = int(request.split('/adjust_all/')[1].split(' ')[0])
+
+                adjust_all_speeds(increment)
+
             elif '/led/on' in request:
-                led.value(0)  # LED ON (active low)
+
+                led.value(0)
+
                 led_state = 'on'
+
             elif '/led/off' in request:
-                led.value(1)  # LED OFF (inactive high)
+
+                led.value(1)
+
                 led_state = 'off'
 
-            # Send back the HTML response
-                # Parse request path
+
+
             if '/status' in request:
-                response = get_status_json()
+
                 cl.send('HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n')
-                cl.sendall(str(response).replace("'", '"'))  # Send JSON response
+
+                cl.sendall(get_status_json())
+
             else:
-                response = web_page()
+
                 cl.send('HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: close\r\n\r\n')
-                cl.sendall(response)
-        except OSError as e:
+
+                cl.sendall(web_page())
+
+
+
+        except Exception as e:
+
             print('Error:', e)
+
         finally:
+
             cl.close()
 
 
+
 def setup():
+
     create_wifi()
+
     web_server()
+
 
 
 setup()

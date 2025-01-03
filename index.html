@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>RC Car Control</title>
+    <style>
+      body {
+       padding: 20px;
+      }
+      h1 {
+        text-align: center;
+      }
+      button {
+        display: block;
+        margin: auto;
+        margin-top: 20px;
+        padding: 10px 20px;
+        font-size: 20px;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    
+    <div style="display: flex; justify-content: space-between">
+      <div style="display: flex; gap: 2%;">
+        <button onclick="fetch('/left')">Left</button
+        ><button onclick="fetch('/right')">Right</button>
+      </div>
+      <div class="display: flex">
+        <button onclick="fetch('/forward')">Forward</button>
+        <button onclick="fetch('/backward')">Backward</button>
+     
+    </div>
+    <script>
+      function fetch(url) {
+        var xhttp = new XMLHttpRequest();
+        xhttp.open("GET", url, true);
+        xhttp.send();
+      }
+    </script>
+  </body>
+</html>
